@@ -164,13 +164,28 @@ The optional attribute list (`:card_token, :total`) slices the context before pa
 
 ## Composing Use Cases with Flows
 
-Flows chain multiple use cases sharing a single context. Each use case can read data written by a previous step:
+Flows chain multiple use cases sharing a single context. Each use case can read data written by a previous step.
+
+### Defining the steps
 
 ```ruby
+# app/use_cases/orders/place_order.rb
+module Orders
+  class PlaceOrder < UseCaseBase
+    def call
+      # reads: context.card_token, context.total (set by validator via to_context)
+      # writes: context.order
+      context.order = Order.create!(card_token: context.card_token, total: context.total)
+    end
+  end
+end
+
 # app/use_cases/orders/charge_card.rb
 module Orders
   class ChargeCard < UseCaseBase
     def call
+      # reads: context.card_token, context.total
+      # writes: context.charge
       charge = PaymentGateway.charge(context.card_token, context.total)
 
       return context.charge = charge if charge.success?
@@ -184,6 +199,7 @@ end
 module Orders
   class SendConfirmation < UseCaseBase
     def call
+      # reads: context.order (written by PlaceOrder)
       OrderMailer.with(order: context.order).confirmation.deliver_later
     end
   end
@@ -193,11 +209,14 @@ end
 module Orders
   class FulfillOrder < UseCaseBase
     def call
+      # reads: context.order (written by PlaceOrder)
       context.order.update!(fulfilled: true)
     end
   end
 end
 ```
+
+### Assembling the flow
 
 ```ruby
 # app/use_cases/orders/checkout.rb
@@ -212,7 +231,43 @@ module Orders
 end
 ```
 
-`transactional` wraps execution in `ActiveRecord::Base.transaction`. If any use case calls `context.fail!`, the transaction is rolled back.
+### How context chains through each step
+
+When `Orders::Checkout.call(card_token: "tok_abc", total: 49.99)` is called:
+
+```
+Input context:      { card_token: "tok_abc", total: 49.99 }
+  ↓ validate        merges to_context → { card_token: "tok_abc", total: 49.99 }
+  ↓ PlaceOrder      writes context.order = #<Order id=1>
+  ↓ ChargeCard      writes context.charge = #<Charge id=ch_x>
+  ↓ SendConfirmation  enqueues email (reads context.order)
+  ↓ FulfillOrder    updates context.order.fulfilled = true
+Output context:     { card_token: "tok_abc", total: 49.99, order: #<Order>, charge: #<Charge> }
+```
+
+If `ChargeCard` calls `context.fail!`, the remaining steps are skipped and the transaction rolls back:
+
+```
+  ↓ PlaceOrder      writes context.order = #<Order id=1>
+  ↓ ChargeCard      calls context.fail! → remaining steps skipped, transaction rolls back
+  ✗ SendConfirmation  (skipped)
+  ✗ FulfillOrder    (skipped)
+Output context:     { ..., failure: true, status: :payment_required, message: "Card declined" }
+```
+
+### Invoking from a controller
+
+```ruby
+result = Orders::Checkout.call(card_token: params[:card_token], total: params[:total])
+
+if result.context.success?
+  render json: { order_id: result.context.order.id }
+else
+  render json: { error: result.context.message }, status: result.context.status
+end
+```
+
+`transactional` wraps execution in `ActiveRecord::Base.transaction`. If any use case calls `context.fail!`, the transaction is rolled back and no partial writes persist.
 
 ## Reusing Use Cases Standalone and in Flows
 

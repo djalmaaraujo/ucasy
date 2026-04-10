@@ -13,10 +13,10 @@ Ucasy is a Ruby gem providing a lightweight service object / use case pattern fo
 bundle install
 
 # Run tests
-bundle exec rspec
+bundle exec rake test
 
 # Run a single test file
-bundle exec rspec spec/ucasy_spec.rb
+bundle exec ruby -Itest test/ucasy/context_test.rb
 
 # Lint
 bundle exec rubocop

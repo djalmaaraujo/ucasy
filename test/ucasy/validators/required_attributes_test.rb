@@ -25,4 +25,12 @@ class Ucasy::Validators::RequiredAttributesTest < Minitest::Test
 
     assert_nil Ucasy::Validators::RequiredAttributes.call(context, [], FakeUseCase)
   end
+
+  def test_passes_when_required_attribute_is_nil
+    # OpenStruct returns true for respond_to? when key exists, even if value is nil.
+    # This documents the current behaviour: nil values satisfy required_attributes.
+    context = Ucasy::Context.new(password: nil)
+
+    assert_nil Ucasy::Validators::RequiredAttributes.call(context, [:password], FakeUseCase)
+  end
 end

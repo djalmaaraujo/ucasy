@@ -61,7 +61,9 @@ class Ucasy::FlowTest < Minitest::Test
     assert_equal 3, result.context.steps.length
   end
 
-  def test_non_transactional_continues_after_failure
+  def test_non_transactional_stops_on_failure
+    # In non-transactional mode, no ActiveRecord::Rollback is raised, but subsequent
+    # use cases still skip because Base#perform gates on context.failure?.
     result = FlowFailingMidway.call(steps: [])
 
     assert_predicate result.context, :failure?

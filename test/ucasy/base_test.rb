@@ -81,6 +81,7 @@ class Ucasy::BaseTest < Minitest::Test
 
     result = OrderRecorder.call(pre_failed_context)
 
+    assert_same pre_failed_context, result.context
     assert_empty result.context.steps
   end
 
@@ -96,8 +97,7 @@ class Ucasy::BaseTest < Minitest::Test
     result = FailInCall.call(steps: [])
 
     assert_predicate result.context, :failure?
-    assert_includes result.context.steps, :before
-    refute_includes result.context.steps, :after
+    assert_equal [:before], result.context.steps
   end
 
   def test_required_attributes_raises_when_missing

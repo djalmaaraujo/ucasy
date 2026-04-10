@@ -16,7 +16,6 @@ tmp
 .bundle/
 log/*.log
 pkg/
-test/
 .config
 .yardoc
 .rspec_status

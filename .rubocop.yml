@@ -1,6 +1,6 @@
 require:
-  - rubocop-rspec
   - rubocop-rake
+  - rubocop-minitest
 
 inherit_gem:
   standard: config/base.yml
